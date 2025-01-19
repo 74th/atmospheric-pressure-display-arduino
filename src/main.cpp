@@ -7,17 +7,30 @@
 #define I2C1_SCL_PIN GPIO_NUM_0
 #define I2C1_SDA_PIN GPIO_NUM_1
 
+void sht31_softreset()
+{
+  // ソフトリセット
+  Wire.beginTransmission(SHT30_I2C_ADDR);
+  Wire.write(0x30);
+  Wire.write(0xA2);
+  Wire.endTransmission();
+
+  delay(300);
+
+  // ステータスレジスタ消去
+  Wire.beginTransmission(SHT30_I2C_ADDR);
+  Wire.write(0x30);
+  Wire.write(0x41);
+  Wire.endTransmission();
+}
+
 void setup()
 {
   Wire.begin(I2C1_SDA_PIN, I2C1_SCL_PIN);
 
   delay(300);
 
-  // ソフトリセット
-  Wire.beginTransmission(SHT30_I2C_ADDR);
-  Wire.write(0x30);
-  Wire.write(0xA2);
-  Wire.endTransmission();
+  sht31_softreset();
 
   delay(300);
 }
@@ -26,19 +39,54 @@ void loop()
 {
   printf("GET sht31\r\n");
 
-  // 計測データ取得コマンドを送る
-  Wire.beginTransmission(SHT30_I2C_ADDR);
-  Wire.write(0x24);
-  Wire.write(0x00);
-  Wire.endTransmission();
+  uint8_t read_buf[6] = {0};
+  bool success = false;
 
-  Wire.requestFrom(SHT30_I2C_ADDR, 6);
-  uint8_t read_buf[6];
-  for (int i = 0; i < 6; i++)
+  for (int i = 0; i < 10; i++)
   {
-    read_buf[i] = Wire.read();
+    // 計測データ取得コマンドを送る
+    Wire.beginTransmission(SHT30_I2C_ADDR);
+    Wire.write(0x24);
+    Wire.write(0x00);
+    Wire.endTransmission();
+
+    Wire.requestFrom(SHT30_I2C_ADDR, 6);
+    for (int i = 0; i < 6; i++)
+    {
+      read_buf[i] = Wire.read();
+    }
+    Wire.endTransmission();
+
+    // if (read_buf[0] != 0 || read_buf[1] != 0 || read_buf[3] != 0 || read_buf[4] != 0)
+    // humしか表示しないので、humが表示できなかった場合のみとする
+    if (read_buf[3] != 0 || read_buf[4] != 0)
+    {
+      // 値が取得できた
+      success = true;
+      printf("success\r\n");
+      break;
+    }
+
+    // 取得できなかった
+    // 3回トライする
+    printf("fail, retry %d\r\n", i = 0);
+    delay(3000);
   }
-  Wire.endTransmission();
+
+  if (!success)
+  {
+    printf("fail, reset\r\n");
+    sht31_softreset();
+
+    uint8_t msg[2] = {0x03, 0b01111001}; // Eを表示
+    Wire.beginTransmission(SEG7_I2C_ADDR);
+    Wire.write(msg, 2);
+    Wire.endTransmission();
+
+    delay(30000);
+
+    return;
+  }
 
   // 人間が読みやすい値に変換
   int16_t tempRaw, humRaw;
@@ -64,5 +112,5 @@ void loop()
   Wire.write(msg, 4);
   Wire.endTransmission();
 
-  delay(10000);
+  delay(30000);
 }
