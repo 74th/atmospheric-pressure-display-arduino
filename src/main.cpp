@@ -41,6 +41,7 @@ void loop()
 
   uint8_t read_buf[6] = {0};
   bool success = false;
+  uint16_t intHum = 0;
 
   for (int i = 0; i < 10; i++)
   {
@@ -61,6 +62,24 @@ void loop()
     // humしか表示しないので、humが表示できなかった場合のみとする
     if (read_buf[3] != 0 || read_buf[4] != 0)
     {
+      // 人間が読みやすい値に変換
+      int16_t tempRaw, humRaw;
+      float_t temp, hum;
+      tempRaw = (read_buf[0] << 8) | read_buf[1];   // 上位バイトと下位バイトを結合
+      temp = (float_t)(tempRaw) * 175 / 65535 - 45; // ℃に変換
+      humRaw = (read_buf[3] << 8) | read_buf[4];    // 上位バイトと下位バイトを結合
+      hum = (float_t)(humRaw) / 65535 * 100;        // 0.x%に変換
+
+      printf("temperature: %f, humidity: %f\r\n", temp, hum);
+
+      intHum = hum;
+
+      if (intHum == 0)
+      {
+        printf("failed intHum: 0\r\n");
+        continue;
+      }
+
       // 値が取得できた
       success = true;
       printf("success\r\n");
@@ -76,6 +95,7 @@ void loop()
   if (!success)
   {
     printf("fail, reset\r\n");
+
     sht31_softreset();
 
     uint8_t msg[2] = {0x03, 0b01111001}; // Eを表示
@@ -83,22 +103,10 @@ void loop()
     Wire.write(msg, 2);
     Wire.endTransmission();
 
-    delay(30000);
+    delay(10000);
 
     return;
   }
-
-  // 人間が読みやすい値に変換
-  int16_t tempRaw, humRaw;
-  float_t temp, hum;
-  tempRaw = (read_buf[0] << 8) | read_buf[1];   // 上位バイトと下位バイトを結合
-  temp = (float_t)(tempRaw) * 175 / 65535 - 45; // ℃に変換
-  humRaw = (read_buf[3] << 8) | read_buf[4];    // 上位バイトと下位バイトを結合
-  hum = (float_t)(humRaw) / 65535 * 100;        // 0.x%に変換
-
-  printf("temperature: %f, humidity: %f\r\n", temp, hum);
-
-  uint16_t intHum = hum * 10;
 
   printf("send hun: %d\r\n", intHum);
 
@@ -106,11 +114,12 @@ void loop()
   msg[0] = 0x10;           // 整数入力用のレジスタアドレス
   msg[1] = intHum >> 8;    // 上位8bit
   msg[2] = intHum % 0x100; // 下位8bit
-  msg[3] = 1;              // 小数点の位置
+  msg[3] = 0;              // 小数点の位置
 
   Wire.beginTransmission(SEG7_I2C_ADDR);
   Wire.write(msg, 4);
   Wire.endTransmission();
 
-  delay(30000);
+  delay(10000);
+  // delay(5000);
 }
